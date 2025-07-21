@@ -3,6 +3,12 @@
 # 阶段1: 构建应用
 FROM node:20-alpine AS builder
 
+# 设置阿里云alpine源
+RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories
+
+# 设置阿里云npm源
+RUN npm config set registry https://registry.npmmirror.com
+
 # 设置工作目录
 WORKDIR /app
 
@@ -20,6 +26,9 @@ RUN npm run build
 
 # 阶段2: 生产环境
 FROM nginx:alpine AS production
+
+# 设置阿里云alpine源
+RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories
 
 # 安装必要的工具
 RUN apk add --no-cache curl
