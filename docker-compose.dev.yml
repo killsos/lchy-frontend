@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  # 开发环境前端
+  frontend-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    image: roi-frontend:dev
+    container_name: roi-frontend-dev
+    ports:
+      - "5173:5173"  # Vite开发服务器端口
+    environment:
+      - NODE_ENV=development
+      - VITE_API_BASE_URL=http://localhost:8080
+    volumes:
+      - .:/app
+      - /app/node_modules
+    networks:
+      - app-network
+    restart: unless-stopped
+    command: npm run dev
+
+networks:
+  app-network:
+    driver: bridge

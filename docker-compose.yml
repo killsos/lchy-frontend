@@ -1,0 +1,65 @@
+version: '3.8'
+
+services:
+  # 前端应用
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    image: roi-frontend:latest
+    container_name: roi-frontend
+    ports:
+      - "80:80"
+    environment:
+      - NODE_ENV=production
+    volumes:
+      # 可选：挂载自定义nginx配置
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    networks:
+      - app-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # 后端API服务 (如果有的话，根据实际情况调整)
+  # backend:
+  #   image: roi-backend:latest
+  #   container_name: roi-backend
+  #   ports:
+  #     - "8080:8080"
+  #   environment:
+  #     - NODE_ENV=production
+  #     - DATABASE_URL=postgresql://user:password@db:5432/roi_database
+  #   networks:
+  #     - app-network
+  #   restart: unless-stopped
+  #   depends_on:
+  #     - db
+
+  # 数据库服务 (如果需要的话)
+  # db:
+  #   image: postgres:15-alpine
+  #   container_name: roi-database
+  #   environment:
+  #     POSTGRES_DB: roi_database
+  #     POSTGRES_USER: user
+  #     POSTGRES_PASSWORD: password
+  #   volumes:
+  #     - postgres_data:/var/lib/postgresql/data
+  #   ports:
+  #     - "5432:5432"
+  #   networks:
+  #     - app-network
+  #   restart: unless-stopped
+
+networks:
+  app-network:
+    driver: bridge
+
+# volumes:
+#   postgres_data:

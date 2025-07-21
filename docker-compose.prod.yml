@@ -1,0 +1,54 @@
+version: '3.8'
+
+services:
+  # 前端应用
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    image: roi-frontend:latest
+    container_name: roi-frontend-prod
+    ports:
+      - "80:80"
+      - "443:443"  # HTTPS端口
+    environment:
+      - NODE_ENV=production
+    volumes:
+      # 挂载SSL证书目录（如果有的话）
+      - ./ssl:/etc/nginx/ssl:ro
+      # 挂载自定义nginx配置
+      - ./nginx.prod.conf:/etc/nginx/nginx.conf:ro
+      # 挂载日志目录
+      - ./logs:/var/log/nginx
+    networks:
+      - app-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    labels:
+      - "com.docker.compose.project=roi-frontend"
+      - "maintainer=your-email@example.com"
+
+  # 可选：添加监控服务
+  watchtower:
+    image: containrrr/watchtower
+    container_name: watchtower
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - WATCHTOWER_CLEANUP=true
+      - WATCHTOWER_POLL_INTERVAL=3600  # 1小时检查一次更新
+    restart: unless-stopped
+    command: --interval 3600 --cleanup roi-frontend-prod
+
+networks:
+  app-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
