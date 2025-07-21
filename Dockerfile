@@ -15,8 +15,10 @@ WORKDIR /app
 # 复制package文件
 COPY package*.json ./
 
-# 安装所有依赖（构建需要开发依赖）
-RUN npm ci
+# 清理npm缓存并安装依赖
+RUN npm cache clean --force && \
+    npm ci --only=production=false --silent || \
+    (npm install && npm cache clean --force)
 
 # 复制源代码
 COPY . .
