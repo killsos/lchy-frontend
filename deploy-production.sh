@@ -26,7 +26,7 @@ BACKUP_DIR="${BACKUP_DIR:-./backups}"
 LOG_DIR="${LOG_DIR:-./logs}"
 NGINX_PORT="${NGINX_PORT:-80}"
 NGINX_SSL_PORT="${NGINX_SSL_PORT:-443}"
-API_BACKEND_URL="${API_BACKEND_URL:-http://localhost:3200}"
+API_BACKEND_URL="${API_BACKEND_URL:-http://8.155.15.70:3200}"
 
 # Docker Compose命令变量（在check_dependencies中设置）
 DOCKER_COMPOSE_CMD=""
