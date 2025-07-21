@@ -41,6 +41,8 @@ print_message() {
 # 函数：记录日志
 log_message() {
     local message="[$(date +'%Y-%m-%d %H:%M:%S')] $1"
+    # 确保日志目录存在
+    mkdir -p "${LOG_DIR}"
     echo "$message" >> "${LOG_DIR}/deploy.log"
     print_message "$1" "$2"
 }
