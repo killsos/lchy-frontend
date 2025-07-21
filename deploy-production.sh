@@ -22,7 +22,7 @@ IMAGE_NAME="${IMAGE_NAME:-roi-frontend}"
 CONTAINER_NAME="${CONTAINER_NAME:-roi-frontend-prod}"
 DOMAIN_NAME="${DOMAIN_NAME:-localhost}"
 SSL_EMAIL="${SSL_EMAIL:-admin@example.com}"
-BACKUP_DIR="${BACKUP_DIR:-/var/backups/roi-frontend}"
+BACKUP_DIR="${BACKUP_DIR:-./backups}"
 LOG_DIR="${LOG_DIR:-./logs}"
 NGINX_PORT="${NGINX_PORT:-80}"
 NGINX_SSL_PORT="${NGINX_SSL_PORT:-443}"
@@ -130,7 +130,7 @@ EOF
 
 # 函数：创建nginx生产配置
 create_nginx_config() {
-    cat > nginx.prod.conf << 'EOF'
+    cat > nginx.prod.conf << EOF
 events {
     worker_connections 1024;
     multi_accept on;
@@ -142,9 +142,9 @@ http {
     default_type  application/octet-stream;
     
     # 日志格式
-    log_format main '$remote_addr - $remote_user [$time_local] "$request" '
-                   '$status $body_bytes_sent "$http_referer" '
-                   '"$http_user_agent" "$http_x_forwarded_for"';
+    log_format main '\$remote_addr - \$remote_user [\$time_local] "\$request" '
+                   '\$status \$body_bytes_sent "\$http_referer" '
+                   '"\$http_user_agent" "\$http_x_forwarded_for"';
     
     # 性能优化
     sendfile on;
@@ -172,9 +172,6 @@ http {
         listen 80;
         server_name ${DOMAIN_NAME};
         
-        # SSL重定向（如果启用SSL）
-        # return 301 https://$server_name$request_uri;
-        
         # 静态文件根目录
         root /usr/share/nginx/html;
         index index.html index.htm;
@@ -183,13 +180,13 @@ http {
         location /api {
             proxy_pass ${API_BACKEND_URL};
             proxy_http_version 1.1;
-            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Upgrade \$http_upgrade;
             proxy_set_header Connection 'upgrade';
-            proxy_set_header Host $host;
-            proxy_set_header X-Real-IP $remote_addr;
-            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto $scheme;
-            proxy_cache_bypass $http_upgrade;
+            proxy_set_header Host \$host;
+            proxy_set_header X-Real-IP \$remote_addr;
+            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto \$scheme;
+            proxy_cache_bypass \$http_upgrade;
             
             # 超时设置
             proxy_connect_timeout 30s;
@@ -199,10 +196,10 @@ http {
         
         # Vue Router历史模式支持
         location / {
-            try_files $uri $uri/ /index.html;
+            try_files \$uri \$uri/ /index.html;
             
             # 静态资源缓存
-            location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
+            location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)\$ {
                 expires 1y;
                 add_header Cache-Control "public, immutable";
                 access_log off;
@@ -231,21 +228,6 @@ http {
             root /usr/share/nginx/html;
         }
     }
-    
-    # HTTPS配置（如果需要）
-    # server {
-    #     listen 443 ssl http2;
-    #     server_name ${DOMAIN_NAME};
-    #     
-    #     ssl_certificate /etc/ssl/certs/cert.pem;
-    #     ssl_certificate_key /etc/ssl/private/key.pem;
-    #     
-    #     ssl_protocols TLSv1.2 TLSv1.3;
-    #     ssl_ciphers ECDHE-RSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384;
-    #     ssl_prefer_server_ciphers off;
-    #     
-    #     # 其他配置同HTTP server块
-    # }
 }
 EOF
     log_message "创建 nginx.prod.conf 文件" $GREEN
@@ -272,24 +254,40 @@ get_next_color() {
 
 # 函数：备份当前版本
 backup_current_version() {
-    if docker images ${IMAGE_NAME}:latest -q > /dev/null 2>&1; then
+    local image_exists=$(docker images ${IMAGE_NAME}:latest -q 2>/dev/null)
+    local container_exists=$(docker ps -aq --filter name=${CONTAINER_NAME} 2>/dev/null)
+    
+    if [ -n "$image_exists" ] || [ -n "$container_exists" ]; then
         log_message "备份当前版本..." $BLUE
         
         local backup_tag="backup_$(date +%Y%m%d_%H%M%S)"
-        docker tag ${IMAGE_NAME}:latest ${IMAGE_NAME}:${backup_tag}
         
-        # 保存镜像到备份目录
-        docker save ${IMAGE_NAME}:${backup_tag} | gzip > ${BACKUP_DIR}/${backup_tag}.tar.gz
-        
-        # 保存当前容器配置（如果有jq则格式化，否则直接保存）
-        if command -v jq &> /dev/null; then
-            docker inspect ${CONTAINER_NAME} | jq . > ${BACKUP_DIR}/${backup_tag}_config.json 2>/dev/null || true
-        else
-            docker inspect ${CONTAINER_NAME} > ${BACKUP_DIR}/${backup_tag}_config.json 2>/dev/null || true
+        # 备份镜像（如果存在）
+        if [ -n "$image_exists" ]; then
+            docker tag ${IMAGE_NAME}:latest ${IMAGE_NAME}:${backup_tag}
+            
+            # 保存镜像到备份目录
+            if docker save ${IMAGE_NAME}:${backup_tag} | gzip > ${BACKUP_DIR}/${backup_tag}.tar.gz; then
+                log_message "镜像备份成功: ${backup_tag}" $GREEN
+            else
+                log_message "镜像备份失败，但继续部署" $YELLOW
+            fi
         fi
         
-        log_message "当前版本已备份: ${backup_tag}" $GREEN
+        # 备份容器配置（如果容器存在）
+        if [ -n "$container_exists" ]; then
+            if command -v jq &> /dev/null; then
+                docker inspect ${CONTAINER_NAME} | jq . > ${BACKUP_DIR}/${backup_tag}_config.json 2>/dev/null || true
+            else
+                docker inspect ${CONTAINER_NAME} > ${BACKUP_DIR}/${backup_tag}_config.json 2>/dev/null || true
+            fi
+            log_message "容器配置已备份" $GREEN
+        fi
+        
         echo "$backup_tag" > "${BACKUP_DIR}/latest_backup.txt"
+        log_message "当前版本备份完成: ${backup_tag}" $GREEN
+    else
+        log_message "没有现有镜像或容器需要备份，跳过备份步骤" $YELLOW
     fi
 }
 
