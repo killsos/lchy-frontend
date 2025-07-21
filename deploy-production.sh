@@ -28,6 +28,9 @@ NGINX_PORT="${NGINX_PORT:-80}"
 NGINX_SSL_PORT="${NGINX_SSL_PORT:-443}"
 API_BACKEND_URL="${API_BACKEND_URL:-http://localhost:3200}"
 
+# Docker Compose命令变量（在check_dependencies中设置）
+DOCKER_COMPOSE_CMD=""
+
 # 蓝绿部署配置
 BLUE_CONTAINER="${PROJECT_NAME}-blue"
 GREEN_CONTAINER="${PROJECT_NAME}-green"
@@ -60,8 +63,19 @@ check_dependencies() {
     log_message "检查系统依赖项..." $BLUE
     
     check_command "docker"
-    check_command "docker-compose"
     check_command "curl"
+    
+    # 检查docker compose（新版本）或docker-compose（旧版本）
+    if ! docker compose version &> /dev/null && ! command -v docker-compose &> /dev/null; then
+        log_message "Docker Compose未安装或不可用，请安装Docker Compose" $RED
+        exit 1
+    elif docker compose version &> /dev/null; then
+        log_message "使用Docker Compose V2 (docker compose)" $GREEN
+        DOCKER_COMPOSE_CMD="docker compose"
+    else
+        log_message "使用Docker Compose V1 (docker-compose)" $GREEN
+        DOCKER_COMPOSE_CMD="docker-compose"
+    fi
     
     # jq为可选依赖，不是必需的
     if ! command -v jq &> /dev/null; then
@@ -400,14 +414,14 @@ standard_deploy() {
     log_message "开始标准部署..." $BLUE
     
     # 停止现有服务
-    docker-compose -f docker-compose.prod.yml down 2>/dev/null || {
+    $DOCKER_COMPOSE_CMD -f docker-compose.prod.yml down 2>/dev/null || {
         docker stop ${CONTAINER_NAME} 2>/dev/null || true
         docker rm ${CONTAINER_NAME} 2>/dev/null || true
     }
     
     # 启动新服务
     if [ -f "docker-compose.prod.yml" ]; then
-        docker-compose -f docker-compose.prod.yml up -d
+        $DOCKER_COMPOSE_CMD -f docker-compose.prod.yml up -d
     else
         # 使用docker run
         docker run -d \
