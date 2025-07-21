@@ -62,7 +62,13 @@ check_dependencies() {
     check_command "docker"
     check_command "docker-compose"
     check_command "curl"
-    check_command "jq"
+    
+    # jq为可选依赖，不是必需的
+    if ! command -v jq &> /dev/null; then
+        log_message "警告: jq未安装，部分JSON解析功能可能受限" $YELLOW
+    else
+        log_message "jq已安装" $GREEN
+    fi
     
     if ! docker info > /dev/null 2>&1; then
         log_message "Docker未运行，请启动Docker服务" $RED
@@ -261,8 +267,12 @@ backup_current_version() {
         # 保存镜像到备份目录
         docker save ${IMAGE_NAME}:${backup_tag} | gzip > ${BACKUP_DIR}/${backup_tag}.tar.gz
         
-        # 保存当前容器配置
-        docker inspect ${CONTAINER_NAME} > ${BACKUP_DIR}/${backup_tag}_config.json 2>/dev/null || true
+        # 保存当前容器配置（如果有jq则格式化，否则直接保存）
+        if command -v jq &> /dev/null; then
+            docker inspect ${CONTAINER_NAME} | jq . > ${BACKUP_DIR}/${backup_tag}_config.json 2>/dev/null || true
+        else
+            docker inspect ${CONTAINER_NAME} > ${BACKUP_DIR}/${backup_tag}_config.json 2>/dev/null || true
+        fi
         
         log_message "当前版本已备份: ${backup_tag}" $GREEN
         echo "$backup_tag" > "${BACKUP_DIR}/latest_backup.txt"
